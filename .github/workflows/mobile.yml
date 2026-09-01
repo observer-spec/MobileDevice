@@ -28,7 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+      # Use a dedicated secret. The prior VNC_PASSWORD secret is a one-character
+      # value, which caused both global log masking and rejected authentication.
+      ANDROID_VNC_PASSWORD: ${{ secrets.ANDROID_VNC_PASSWORD }}
     steps:
       # Required because SDK setup is maintained in scripts/setup-android-sdk.sh.
       - name: Checkout repository
@@ -42,10 +44,8 @@ jobs:
 
       - name: Verify interactive-session secret
         run: |
-          if [ -z "$VNC_PASSWORD" ]; then
-            echo "::error::Set the VNC_PASSWORD repository secret before starting an interactive session."
-            exit 1
-          fi
+          echo "Android VNC password source: dedicated secret or built-in six-digit fallback."
+          echo "Set ANDROID_VNC_PASSWORD (1-8 characters) to override the fallback."
 
       - name: Cache Android SDK and AVD metadata
         uses: actions/cache@v4
@@ -66,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb x11vnc novnc websockify libpulse0 curl wget
+            xvfb x11vnc novnc websockify x11-utils netcat-openbsd libpulse0 curl wget
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
           rm cloudflared-linux-amd64.deb
