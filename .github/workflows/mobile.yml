@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb x11vnc novnc websockify curl wget
+            xvfb x11vnc novnc websockify libpulse0 curl wget
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
           rm cloudflared-linux-amd64.deb
