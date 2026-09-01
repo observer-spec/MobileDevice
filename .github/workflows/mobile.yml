@@ -28,6 +28,10 @@ jobs:
     env:
       VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
     steps:
+      # Required because SDK setup is maintained in scripts/setup-android-sdk.sh.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - uses: android-actions/setup-android@v3
 
       - name: Prepare SDK directory for cache restore
