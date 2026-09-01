@@ -34,6 +34,12 @@ jobs:
             exit 1
           fi
 
+      - name: Cache Android SDK and AVD metadata
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: android-sdk-${{ runner.os }}-api30-v1
+
       - name: Install Android emulator components
         run: |
           sdkmanager --install \
@@ -115,7 +121,6 @@ jobs:
           adb devices
           adb shell getprop ro.build.version.release
           adb shell wm size
-          adb shell input keyevent 82
           adb shell settings get secure android_id
 
       - name: Keep interactive session alive
