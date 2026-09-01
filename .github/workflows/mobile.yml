@@ -153,7 +153,7 @@ jobs:
             adb devices -l || true
             exit 1
           }
-          printf '%s:5555\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
+          printf '%s:5037\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
           cat > /tmp/current-scrcpy-endpoint.md <<EOF
           # Active Android scrcpy endpoint
 
