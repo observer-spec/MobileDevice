@@ -39,6 +39,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
       - name: Create and boot emulator without KVM
         run: |
+          set -euxo pipefail
           echo no | avdmanager create avd \
             --name mobile-test \
             --package 'system-images;android-30;google_apis;x86_64' \
@@ -46,7 +47,12 @@ jobs:
           nohup emulator @mobile-test \
             -no-window -no-audio -no-boot-anim -no-snapshot \
             -gpu swiftshader_indirect -no-accel > emulator.log 2>&1 &
-          adb wait-for-device
+          if ! timeout 180 adb wait-for-device; then
+            echo 'Emulator did not connect to ADB within 180 seconds.'
+            adb devices -l || true
+            cat emulator.log || true
+            exit 1
+          fi
           timeout 600 bash -c \
             'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" = "1" ]; do sleep 5; done'
       - name: Run ADB smoke test
