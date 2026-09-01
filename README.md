@@ -1,8 +1,15 @@
 # MobileDevice
 
-A minimal GitHub Actions example that tests a mobile layout in cloud-hosted runners using Playwright's Pixel 5 and iPhone 13 device profiles.
+GitHub Actions mobile testing with Playwright and an Android Emulator.
 
-## Run locally
+## Checks included
+
+- **Mobile browser emulation:** Pixel 5 and iPhone 13 profiles via Playwright.
+- **Android ADB smoke test:** Boots a cloud-hosted Android API 35 emulator, verifies the ADB connection, reads Android properties, checks screen size, and sends an input event.
+
+The Android job is in `.github/workflows/mobile.yml` and uses [`reactivecircus/android-emulator-runner`](https://github.com/ reactivecircus/android-emulator-runner). It runs on every push, pull request, or manual dispatch.
+
+## Run browser tests locally
 
 ```bash
 npm install
@@ -10,8 +17,14 @@ npx playwright install chromium
 npm test
 ```
 
-Every push and pull request runs the mobile checks in `.github/workflows/mobile.yml`. The runner is ephemeral and cloud-hosted by GitHub; Playwright emulates the device viewport, touch behavior, and user agent.
+## Add an APK later
 
-## Real cloud phones
+Inside the emulator runner's `script`, add commands such as:
 
-For tests on physical Android/iOS devices, add a provider such as Firebase Test Lab, BrowserStack, Sauce Labs, or AWS Device Farm. Store provider credentials in GitHub Actions Secrets, then upload the APK/IPA and invoke the provider CLI from the workflow. This repository intentionally needs no paid provider account or secrets, so its check runs immediately.
+```bash
+adb install path/to/app.apk
+adb shell am start -n com.example.app/.MainActivity
+adb logcat -d
+```
+
+This uses a cloud-hosted emulator, not a physical phone. For real devices, integrate Firebase Test Lab, BrowserStack, Sauce Labs, or AWS Device Farm with GitHub Actions Secrets.
