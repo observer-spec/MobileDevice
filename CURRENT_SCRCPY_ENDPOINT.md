@@ -3,6 +3,6 @@
 This endpoint is private to your Tailscale tailnet and expires with this workflow.
 
 ```powershell
-adb connect 100.92.76.107:5556
-scrcpy -s 100.92.76.107:5556
+adb connect 100.79.49.77:5556
+scrcpy -s 100.79.49.77:5556
 ```
