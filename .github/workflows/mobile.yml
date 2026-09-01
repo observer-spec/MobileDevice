@@ -38,6 +38,14 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Join private Tailscale network for native scrcpy
+        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          hostname: mobiledevice-${{ github.run_id }}
+          tags: tag:ci
+
       - name: Prepare SDK directory for cache restore
         run: |
           sudo chown -R "$(id -un):$(id -gn)" "$ANDROID_HOME"
@@ -121,6 +129,42 @@ jobs:
           adb shell settings put global transition_animation_scale 0 || true
           adb shell settings put global animator_duration_scale 0 || true
 
+      - name: Enable native scrcpy over Tailscale
+        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          adb tcpip 5555
+          TAILSCALE_IP=$(tailscale ip -4)
+          test -n "$TAILSCALE_IP"
+          printf '%s:5555\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
+          cat > /tmp/current-scrcpy-endpoint.md <<EOF
+          # Active Android scrcpy endpoint
+
+          This endpoint is private to your Tailscale tailnet and expires with this workflow.
+
+          ```bash
+          adb connect $TAILSCALE_IP:5555
+          scrcpy -s $TAILSCALE_IP:5555
+          ```
+          EOF
+          SHA=$(gh api "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" --jq .sha 2>/dev/null || true)
+          if [ -n "$SHA" ]; then
+            gh api --method PUT "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" -f message='chore: update active scrcpy endpoint' -f content="$(base64 -w0 /tmp/current-scrcpy-endpoint.md)" -f sha="$SHA" >/dev/null
+          else
+            gh api --method PUT "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" -f message='chore: publish active scrcpy endpoint' -f content="$(base64 -w0 /tmp/current-scrcpy-endpoint.md)" >/dev/null
+          fi
+          {
+            echo
+            echo '## Native scrcpy (private Tailscale)'
+            echo
+            echo 'Install Tailscale and scrcpy on your computer, then run:'
+            echo
+            echo "\`adb connect $TAILSCALE_IP:5555\`"
+            echo "\`scrcpy -s $TAILSCALE_IP:5555\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish browser access URL
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,11 +214,14 @@ jobs:
             echo 'Login uses the VNC_PASSWORD repository secret.'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload emulator URL
+      - name: Upload emulator access details
         uses: actions/upload-artifact@v4
         with:
           name: android-emulator-access
-          path: emulator-access-url.txt
+          path: |
+            emulator-access-url.txt
+            scrcpy-adb-endpoint.txt
+          if-no-files-found: warn
           retention-days: 1
 
       - name: Run ADB smoke test
