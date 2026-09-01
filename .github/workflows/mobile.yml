@@ -111,7 +111,9 @@ jobs:
             EMULATOR_ACCEL='-accel off'
             echo '::warning::KVM unavailable; Android may take substantially longer to boot.'
           fi
-          EMULATOR_FLAGS="-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 $EMULATOR_ACCEL"
+          # Give the guest enough headroom for System UI and let the emulator select
+          # the best available renderer instead of forcing deprecated SwiftShader mode.
+          EMULATOR_FLAGS="-no-audio -no-boot-anim -no-snapshot -gpu auto -memory 4096 -cores 4 $EMULATOR_ACCEL"
 
           nohup "$ANDROID_HOME/emulator/emulator" @mobile-test $EMULATOR_FLAGS \
             > emulator.log 2>&1 &
