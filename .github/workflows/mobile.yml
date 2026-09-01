@@ -5,6 +5,14 @@ on:
   pull_request:
   # Manual runs automatically start the browser-accessible emulator session.
   workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Maximum interactive session lifetime (1-350 minutes)"
+        required: false
+        default: "120"
+
+permissions:
+  contents: write
 
 # Only one mobile test run per branch/PR. New commits cancel stale emulator runs.
 concurrency:
@@ -96,6 +104,9 @@ jobs:
 
       - name: Publish browser access URL
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MINUTES: ${{ inputs.minutes }}
         run: |
           for i in {1..30}; do
             curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null && break
@@ -116,10 +127,27 @@ jobs:
           echo "WEB ANDROID DESKTOP: $ACCESS_URL"
           echo "==============================================================="
           echo "::notice title=Android emulator URL::$ACCESS_URL"
+
+          # Publish a small, non-secret pointer in the repository, like RDP-AI.
+          # The URL is temporary; it is overwritten on every manual run.
+          printf '# Active Android emulator endpoint\n\n**URL:** %s\n\nThis temporary URL expires when the workflow ends. Login uses the VNC_PASSWORD repository secret.\n' "$ACCESS_URL" > /tmp/current-endpoint.md
+          SHA=$(gh api "repos/${{ github.repository }}/contents/CURRENT_ENDPOINT.md" --jq .sha 2>/dev/null || true)
+          if [ -n "$SHA" ]; then
+            gh api --method PUT "repos/${{ github.repository }}/contents/CURRENT_ENDPOINT.md" \
+              -f message='chore: update active Android emulator endpoint' \
+              -f content="$(base64 -w0 /tmp/current-endpoint.md)" -f sha="$SHA" >/dev/null
+          else
+            gh api --method PUT "repos/${{ github.repository }}/contents/CURRENT_ENDPOINT.md" \
+              -f message='chore: publish active Android emulator endpoint' \
+              -f content="$(base64 -w0 /tmp/current-endpoint.md)" >/dev/null
+          fi
+
           {
             echo '# Android emulator browser session'
             echo
             echo "**Open:** [$ACCESS_URL]($ACCESS_URL)"
+            echo
+            echo "The current endpoint is also published in [CURRENT_ENDPOINT.md](https://github.com/${{ github.repository }}/blob/main/CURRENT_ENDPOINT.md)."
             echo
             echo 'Login uses the VNC_PASSWORD repository secret.'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -142,12 +170,17 @@ jobs:
 
       - name: Keep interactive session alive
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        timeout-minutes: 340
+        timeout-minutes: 350
+        env:
+          MINUTES: ${{ inputs.minutes }}
         run: |
-          echo 'Interactive Android session is live. Stop the workflow when finished.'
-          while sleep 300; do
+          DURATION=$(( ${MINUTES:-120} * 60 ))
+          END=$(( $(date +%s) + DURATION ))
+          echo "Interactive Android session is live for ${MINUTES:-120} minutes."
+          while [ "$(date +%s)" -lt "$END" ]; do
             adb get-state >/dev/null
             echo "Android emulator alive: $(date -u)"
+            sleep 300
           done
 
       - name: Upload emulator logs on failure
