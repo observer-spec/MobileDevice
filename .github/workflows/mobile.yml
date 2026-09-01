@@ -2,6 +2,8 @@ name: Mobile device test
 
 on:
   push:
+    paths-ignore:
+      - CURRENT_ENDPOINT.md
   pull_request:
   # Manual runs automatically start the browser-accessible emulator session.
   workflow_dispatch:
@@ -24,7 +26,7 @@ jobs:
   android-adb:
     name: Android emulator and ADB
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 30 }}
+    timeout-minutes: 350
     env:
       VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
     steps:
@@ -39,7 +41,6 @@ jobs:
           sudo chown -R "$(id -un):$(id -gn)" "$ANDROID_HOME"
 
       - name: Verify interactive-session secret
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           if [ -z "$VNC_PASSWORD" ]; then
             echo "::error::Set the VNC_PASSWORD repository secret before starting an interactive session."
@@ -62,7 +63,6 @@ jobs:
         run: scripts/setup-android-sdk.sh
 
       - name: Install browser desktop bridge
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -82,8 +82,7 @@ jobs:
             --device pixel_2
           "$ANDROID_HOME/emulator/emulator" -list-avds
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            export DISPLAY=:99
+          export DISPLAY=:99
             echo 'DISPLAY=:99' >> "$GITHUB_ENV"
             Xvfb :99 -screen 0 1280x800x24 -ac +extension GLX +render -noreset > xvfb.log 2>&1 &
             x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc.pass >/dev/null 2>&1
@@ -91,9 +90,6 @@ jobs:
               -rfbauth /tmp/vnc.pass > x11vnc.log 2>&1 &
             websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 > novnc.log 2>&1 &
             EMULATOR_FLAGS='-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
-          else
-            EMULATOR_FLAGS='-no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
-          fi
 
           nohup "$ANDROID_HOME/emulator/emulator" @mobile-test $EMULATOR_FLAGS \
             > emulator.log 2>&1 &
@@ -107,10 +103,9 @@ jobs:
             'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
 
       - name: Publish browser access URL
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          MINUTES: ${{ inputs.minutes }}
+          MINUTES: ${{ inputs.minutes || '120' }}
         run: |
           for i in {1..30}; do
             curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null && break
@@ -157,7 +152,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload emulator URL
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4
         with:
           name: android-emulator-access
@@ -173,10 +167,9 @@ jobs:
           adb shell settings get secure android_id
 
       - name: Keep interactive session alive
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         timeout-minutes: 350
         env:
-          MINUTES: ${{ inputs.minutes }}
+          MINUTES: ${{ inputs.minutes || '120' }}
         run: |
           DURATION=$(( ${MINUTES:-120} * 60 ))
           END=$(( $(date +%s) + DURATION ))
