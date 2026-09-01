@@ -3,25 +3,20 @@ name: Mobile device test
 on:
   push:
   pull_request:
+  # Manual runs automatically start the browser-accessible emulator session.
   workflow_dispatch:
-    inputs:
-      interactive:
-        description: 'Keep an Android emulator session open through a browser'
-        required: false
-        default: false
-        type: boolean
 
 # Only one mobile test run per branch/PR. New commits cancel stale emulator runs.
 concurrency:
   # Keep interactive sessions separate from ordinary push/PR checks.
-  group: mobile-device-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.interactive || 'false' }}
+  group: mobile-device-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   android-adb:
     name: Android emulator and ADB
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive && 360 || 30 }}
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 30 }}
     env:
       VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
     steps:
@@ -32,7 +27,7 @@ jobs:
           sudo chown -R "$(id -un):$(id -gn)" "$ANDROID_HOME"
 
       - name: Verify interactive-session secret
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           if [ -z "$VNC_PASSWORD" ]; then
             echo "::error::Set the VNC_PASSWORD repository secret before starting an interactive session."
@@ -55,7 +50,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install browser desktop bridge
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -75,7 +70,7 @@ jobs:
             --device pixel_2
           "$ANDROID_HOME/emulator/emulator" -list-avds
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.interactive }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             export DISPLAY=:99
             echo 'DISPLAY=:99' >> "$GITHUB_ENV"
             Xvfb :99 -screen 0 1280x800x24 -ac +extension GLX +render -noreset > xvfb.log 2>&1 &
@@ -100,7 +95,7 @@ jobs:
             'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
 
       - name: Publish browser access URL
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           for i in {1..30}; do
             curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null && break
@@ -134,7 +129,7 @@ jobs:
           adb shell settings get secure android_id
 
       - name: Keep interactive session alive
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         timeout-minutes: 340
         run: |
           echo 'Interactive Android session is live. Stop the workflow when finished.'
