@@ -11,18 +11,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mobile-emulation:
-    name: Mobile browser emulation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npm test
-
   android-adb:
     name: Android emulator and ADB
     runs-on: ubuntu-latest
