@@ -26,6 +26,10 @@ jobs:
     steps:
       - uses: android-actions/setup-android@v3
 
+      - name: Prepare SDK directory for cache restore
+        run: |
+          sudo chown -R "$(id -un):$(id -gn)" "$ANDROID_HOME"
+
       - name: Verify interactive-session secret
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
         run: |
