@@ -78,9 +78,9 @@ jobs:
             export DISPLAY=:99
             echo 'DISPLAY=:99' >> "$GITHUB_ENV"
             Xvfb :99 -screen 0 1280x800x24 -ac +extension GLX +render -noreset > xvfb.log 2>&1 &
+            x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc.pass >/dev/null 2>&1
             x11vnc -display :99 -localhost -forever -shared -rfbport 5900 \
-              -passwdfile <(x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc.pass >/dev/null 2>&1 && printf '%s' /tmp/vnc.pass) \
-              > x11vnc.log 2>&1 &
+              -rfbauth /tmp/vnc.pass > x11vnc.log 2>&1 &
             websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 > novnc.log 2>&1 &
             EMULATOR_FLAGS='-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
           else
@@ -101,6 +101,11 @@ jobs:
       - name: Publish browser access URL
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
         run: |
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null
           cloudflared tunnel --url http://127.0.0.1:6080 > cloudflared.log 2>&1 &
           for i in {1..60}; do
             DESKTOP_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
@@ -109,12 +114,12 @@ jobs:
           done
           [ -n "${DESKTOP_URL:-}" ] || { cat cloudflared.log; exit 1; }
           echo "==============================================================="
-          echo "WEB ANDROID DESKTOP: $DESKTOP_URL/vnc.html"
+          echo "WEB ANDROID DESKTOP: $DESKTOP_URL/vnc.html?path=websockify"
           echo "==============================================================="
           {
             echo '# Android emulator browser session'
             echo
-            echo "**Open:** [$DESKTOP_URL/vnc.html]($DESKTOP_URL/vnc.html)"
+            echo "**Open:** [$DESKTOP_URL/vnc.html?path=websockify]($DESKTOP_URL/vnc.html?path=websockify)"
             echo
             echo 'Login uses the VNC_PASSWORD repository secret.'
           } >> "$GITHUB_STEP_SUMMARY"
