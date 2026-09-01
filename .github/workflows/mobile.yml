@@ -59,6 +59,9 @@ jobs:
             /usr/local/lib/android/sdk/system-images
           key: android-sdk-${{ runner.os }}-api30-v2
 
+      - name: Install Android emulator components
+        run: scripts/setup-android-sdk.sh
+
       - name: Enable Android emulator hardware acceleration
         run: |
           if [ -e /dev/kvm ]; then
