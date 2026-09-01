@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      interactive:
+        description: 'Keep an Android emulator session open through a browser'
+        required: false
+        default: false
+        type: boolean
 
 # Only one mobile test run per branch/PR. New commits cancel stale emulator runs.
 concurrency:
@@ -15,8 +21,19 @@ jobs:
     name: Android emulator and ADB
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
     steps:
       - uses: android-actions/setup-android@v3
+
+      - name: Verify interactive-session secret
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        run: |
+          if [ -z "$VNC_PASSWORD" ]; then
+            echo "::error::Set the VNC_PASSWORD repository secret before starting an interactive session."
+            exit 1
+          fi
+
       - name: Install Android emulator components
         run: |
           sdkmanager --install \
@@ -25,7 +42,18 @@ jobs:
             'platforms;android-30' \
             'system-images;android-30;google_apis;x86_64'
           yes | sdkmanager --licenses >/dev/null || true
-      - name: Create and boot emulator without KVM
+
+      - name: Install browser desktop bridge
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        run: |
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            xvfb x11vnc novnc websockify curl wget
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          rm cloudflared-linux-amd64.deb
+
+      - name: Create and boot emulator
         run: |
           set -euxo pipefail
           export ANDROID_AVD_HOME="$HOME/.android/avd"
@@ -35,9 +63,22 @@ jobs:
             --package 'system-images;android-30;google_apis;x86_64' \
             --device pixel_2
           "$ANDROID_HOME/emulator/emulator" -list-avds
-          nohup "$ANDROID_HOME/emulator/emulator" @mobile-test \
-            -no-window -no-audio -no-boot-anim -no-snapshot \
-            -gpu swiftshader_indirect -no-accel > emulator.log 2>&1 &
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.interactive }}" = "true" ]; then
+            export DISPLAY=:99
+            echo 'DISPLAY=:99' >> "$GITHUB_ENV"
+            Xvfb :99 -screen 0 1280x800x24 -ac +extension GLX +render -noreset > xvfb.log 2>&1 &
+            x11vnc -display :99 -localhost -forever -shared -rfbport 5900 \
+              -passwdfile <(x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc.pass >/dev/null 2>&1 && printf '%s' /tmp/vnc.pass) \
+              > x11vnc.log 2>&1 &
+            websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 > novnc.log 2>&1 &
+            EMULATOR_FLAGS='-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
+          else
+            EMULATOR_FLAGS='-no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
+          fi
+
+          nohup "$ANDROID_HOME/emulator/emulator" @mobile-test $EMULATOR_FLAGS \
+            > emulator.log 2>&1 &
           if ! timeout 180 adb wait-for-device; then
             echo 'Emulator did not connect to ADB within 180 seconds.'
             adb devices -l || true
@@ -45,7 +86,29 @@ jobs:
             exit 1
           fi
           timeout 600 bash -c \
-            'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" = "1" ]; do sleep 5; done'
+            'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
+
+      - name: Publish browser access URL
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        run: |
+          cloudflared tunnel --url http://127.0.0.1:6080 > cloudflared.log 2>&1 &
+          for i in {1..60}; do
+            DESKTOP_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
+            [ -n "$DESKTOP_URL" ] && break
+            sleep 2
+          done
+          [ -n "${DESKTOP_URL:-}" ] || { cat cloudflared.log; exit 1; }
+          echo "==============================================================="
+          echo "WEB ANDROID DESKTOP: $DESKTOP_URL/vnc.html"
+          echo "==============================================================="
+          {
+            echo '# Android emulator browser session'
+            echo
+            echo "**Open:** [$DESKTOP_URL/vnc.html]($DESKTOP_URL/vnc.html)"
+            echo
+            echo 'Login uses the VNC_PASSWORD repository secret.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run ADB smoke test
         run: |
           set -e
@@ -54,9 +117,25 @@ jobs:
           adb shell wm size
           adb shell input keyevent 82
           adb shell settings get secure android_id
-      - name: Upload emulator log on failure
+
+      - name: Keep interactive session alive
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.interactive }}
+        timeout-minutes: 340
+        run: |
+          echo 'Interactive Android session is live. Stop the workflow when finished.'
+          while sleep 300; do
+            adb get-state >/dev/null
+            echo "Android emulator alive: $(date -u)"
+          done
+
+      - name: Upload emulator logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: android-emulator-log
-          path: emulator.log
+          name: android-emulator-logs
+          path: |
+            emulator.log
+            xvfb.log
+            x11vnc.log
+            novnc.log
+            cloudflared.log
