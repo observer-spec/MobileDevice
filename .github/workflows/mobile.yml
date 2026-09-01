@@ -24,14 +24,17 @@ jobs:
     steps:
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -noaudio -no-boot-anim
+          emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect
+          emulator-boot-timeout: 600
           disable-animations: true
           script: |
+            set -e
             adb devices
+            adb wait-for-device
             adb shell getprop ro.build.version.release
             adb shell wm size
             adb shell input keyevent 82
