@@ -13,7 +13,8 @@ on:
 
 # Only one mobile test run per branch/PR. New commits cancel stale emulator runs.
 concurrency:
-  group: mobile-device-${{ github.workflow }}-${{ github.ref }}
+  # Keep interactive sessions separate from ordinary push/PR checks.
+  group: mobile-device-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.interactive || 'false' }}
   cancel-in-progress: true
 
 jobs:
