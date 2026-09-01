@@ -44,7 +44,7 @@ jobs:
             --name mobile-test \
             --package 'system-images;android-30;google_apis;x86_64' \
             --device pixel_2
-          nohup emulator @mobile-test \
+          nohup "$ANDROID_HOME/emulator/emulator" @mobile-test \
             -no-window -no-audio -no-boot-anim -no-snapshot \
             -gpu swiftshader_indirect -no-accel > emulator.log 2>&1 &
           if ! timeout 180 adb wait-for-device; then
