@@ -83,13 +83,9 @@ jobs:
           "$ANDROID_HOME/emulator/emulator" -list-avds
 
           export DISPLAY=:99
-            echo 'DISPLAY=:99' >> "$GITHUB_ENV"
-            Xvfb :99 -screen 0 1280x800x24 -ac +extension GLX +render -noreset > xvfb.log 2>&1 &
-            x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc.pass >/dev/null 2>&1
-            x11vnc -display :99 -localhost -forever -shared -rfbport 5900 \
-              -rfbauth /tmp/vnc.pass > x11vnc.log 2>&1 &
-            websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 > novnc.log 2>&1 &
-            EMULATOR_FLAGS='-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
+          echo 'DISPLAY=:99' >> "$GITHUB_ENV"
+          scripts/start-vnc.sh
+          EMULATOR_FLAGS='-no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-accel'
 
           nohup "$ANDROID_HOME/emulator/emulator" @mobile-test $EMULATOR_FLAGS \
             > emulator.log 2>&1 &
