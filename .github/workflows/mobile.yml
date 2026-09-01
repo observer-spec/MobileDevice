@@ -247,9 +247,9 @@ jobs:
         run: |
           set -e
           adb devices
-          adb shell getprop ro.build.version.release
-          adb shell wm size
-          adb shell settings get secure android_id
+          adb -s emulator-5554 shell getprop ro.build.version.release
+          adb -s emulator-5554 shell wm size
+          adb -s emulator-5554 shell settings get secure android_id
 
       - name: Keep interactive session alive
         timeout-minutes: 350
