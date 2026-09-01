@@ -135,19 +135,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          adb tcpip 5555
-          # GitHub-hosted Ubuntu runners can reject inbound traffic even when
-          # adbd is listening. Allow only ADB from the Tailscale interface.
-          sudo iptables -I INPUT -i tailscale0 -p tcp --dport 5555 -j ACCEPT || true
+          # Expose the runner's ADB server over Tailscale. `adb tcpip 5555`
+          # targets the emulator guest and does not expose the host ADB server;
+          # port 5555 is also used by the emulator console.
+          adb kill-server || true
+          sudo iptables -I INPUT -i tailscale0 -p tcp --dport 5037 -j ACCEPT || true
+          adb -a start-server
           TAILSCALE_IP=$(tailscale ip -4)
           test -n "$TAILSCALE_IP"
           for i in {1..20}; do
-            adb connect "$TAILSCALE_IP:5555" >/dev/null 2>&1 || true
-            adb devices | grep -q "$TAILSCALE_IP:5555.*device" && break
+            ADB_SERVER_SOCKET="tcp:$TAILSCALE_IP:5037" adb devices | grep -q 'emulator-5554.*device' && break
             sleep 1
           done
-          adb devices | grep -q "$TAILSCALE_IP:5555.*device" || {
-            echo '::error::ADB did not listen on the Tailscale address.'
+          ADB_SERVER_SOCKET="tcp:$TAILSCALE_IP:5037" adb devices | grep -q 'emulator-5554.*device' || {
+            echo '::error::Remote ADB server is not reachable on Tailscale.'
             ss -lntp || true
             adb devices -l || true
             exit 1
@@ -159,8 +160,8 @@ jobs:
           This endpoint is private to your Tailscale tailnet and expires with this workflow.
 
           ```bash
-          adb connect $TAILSCALE_IP:5555
-          scrcpy -s $TAILSCALE_IP:5555
+          ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 adb devices
+          ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 scrcpy -s emulator-5554
           ```
           EOF
           SHA=$(gh api "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" --jq .sha 2>/dev/null || true)
@@ -175,8 +176,8 @@ jobs:
             echo
             echo 'Install Tailscale and scrcpy on your computer, then run:'
             echo
-            echo "\`adb connect $TAILSCALE_IP:5555\`"
-            echo "\`scrcpy -s $TAILSCALE_IP:5555\`"
+            echo "\`set ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 && adb devices\`"
+            echo "\`set ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 && scrcpy -s emulator-5554\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish browser access URL
