@@ -40,10 +40,13 @@ jobs:
       - name: Create and boot emulator without KVM
         run: |
           set -euxo pipefail
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd \
             --name mobile-test \
             --package 'system-images;android-30;google_apis;x86_64' \
             --device pixel_2
+          emulator -list-avds
           nohup "$ANDROID_HOME/emulator/emulator" @mobile-test \
             -no-window -no-audio -no-boot-anim -no-snapshot \
             -gpu swiftshader_indirect -no-accel > emulator.log 2>&1 &
