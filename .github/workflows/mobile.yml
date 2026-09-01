@@ -260,7 +260,7 @@ jobs:
           END=$(( $(date +%s) + DURATION ))
           echo "Interactive Android session is live for ${MINUTES:-120} minutes."
           while [ "$(date +%s)" -lt "$END" ]; do
-            adb get-state >/dev/null
+            adb -s emulator-5554 get-state >/dev/null
             echo "Android emulator alive: $(date -u)"
             sleep 300
           done
