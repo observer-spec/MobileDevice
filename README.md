@@ -9,6 +9,12 @@ GitHub Actions mobile testing with Playwright and an Android Emulator.
 
 The Android job is in `.github/workflows/mobile.yml` and uses [`reactivecircus/android-emulator-runner`](https://github.com/ReactiveCircus/android-emulator-runner). It runs on every push, pull request, or manual dispatch.
 
+## Access the live Android emulator
+
+To get a browser URL, start the **Mobile device test** workflow with **Run workflow** (not a normal push or pull-request run). The workflow only creates the public tunnel for manual runs. Open the workflow run's **Summary** page and click **Open** under **Android emulator browser session**. The URL is also printed as an `Android emulator URL` notice and included in the failure logs if startup fails.
+
+Log in with the `VNC_PASSWORD` repository secret. The URL is temporary and changes on each run.
+
 ## Run browser tests locally
 
 ```bash

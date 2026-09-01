@@ -109,13 +109,17 @@ jobs:
             sleep 2
           done
           [ -n "${DESKTOP_URL:-}" ] || { cat cloudflared.log; exit 1; }
+          ACCESS_URL="$DESKTOP_URL/vnc.html?path=websockify"
+          echo "DESKTOP_URL=$DESKTOP_URL" >> "$GITHUB_ENV"
+          printf '%s\n' "$ACCESS_URL" > emulator-access-url.txt
           echo "==============================================================="
-          echo "WEB ANDROID DESKTOP: $DESKTOP_URL/vnc.html?path=websockify"
+          echo "WEB ANDROID DESKTOP: $ACCESS_URL"
           echo "==============================================================="
+          echo "::notice title=Android emulator URL::$ACCESS_URL"
           {
             echo '# Android emulator browser session'
             echo
-            echo "**Open:** [$DESKTOP_URL/vnc.html?path=websockify]($DESKTOP_URL/vnc.html?path=websockify)"
+            echo "**Open:** [$ACCESS_URL]($ACCESS_URL)"
             echo
             echo 'Login uses the VNC_PASSWORD repository secret.'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -144,6 +148,7 @@ jobs:
         with:
           name: android-emulator-logs
           path: |
+            emulator-access-url.txt
             emulator.log
             xvfb.log
             x11vnc.log
