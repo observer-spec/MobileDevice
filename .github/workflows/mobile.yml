@@ -154,16 +154,18 @@ jobs:
             exit 1
           }
           printf '%s:5037\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
-          cat > /tmp/current-scrcpy-endpoint.md <<EOF
+          cat > /tmp/current-scrcpy-endpoint.md <<'EOF'
           # Active Android scrcpy endpoint
 
           This endpoint is private to your Tailscale tailnet and expires with this workflow.
 
-          ```bash
-          ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 adb devices
-          ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 scrcpy -s emulator-5554
+          ```powershell
+          $env:ADB_SERVER_SOCKET = "tcp:__TAILSCALE_IP__:5037"
+          adb devices
+          scrcpy -s emulator-5554
           ```
           EOF
+          sed -i "s/__TAILSCALE_IP__/$TAILSCALE_IP/g" /tmp/current-scrcpy-endpoint.md
           SHA=$(gh api "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" --jq .sha 2>/dev/null || true)
           if [ -n "$SHA" ]; then
             gh api --method PUT "repos/${{ github.repository }}/contents/CURRENT_SCRCPY_ENDPOINT.md" -f message='chore: update active scrcpy endpoint' -f content="$(base64 -w0 /tmp/current-scrcpy-endpoint.md)" -f sha="$SHA" >/dev/null
