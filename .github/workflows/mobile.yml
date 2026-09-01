@@ -136,8 +136,22 @@ jobs:
         run: |
           set -Eeuo pipefail
           adb tcpip 5555
+          # GitHub-hosted Ubuntu runners can reject inbound traffic even when
+          # adbd is listening. Allow only ADB from the Tailscale interface.
+          sudo iptables -I INPUT -i tailscale0 -p tcp --dport 5555 -j ACCEPT || true
           TAILSCALE_IP=$(tailscale ip -4)
           test -n "$TAILSCALE_IP"
+          for i in {1..20}; do
+            adb connect "$TAILSCALE_IP:5555" >/dev/null 2>&1 || true
+            adb devices | grep -q "$TAILSCALE_IP:5555.*device" && break
+            sleep 1
+          done
+          adb devices | grep -q "$TAILSCALE_IP:5555.*device" || {
+            echo '::error::ADB did not listen on the Tailscale address.'
+            ss -lntp || true
+            adb devices -l || true
+            exit 1
+          }
           printf '%s:5555\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
           cat > /tmp/current-scrcpy-endpoint.md <<EOF
           # Active Android scrcpy endpoint
