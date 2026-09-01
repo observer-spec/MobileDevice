@@ -84,7 +84,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb x11vnc novnc websockify x11-utils netcat-openbsd libpulse0 curl wget
+            xvfb x11vnc novnc websockify x11-utils netcat-openbsd socat libpulse0 curl wget
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
           rm cloudflared-linux-amd64.deb
@@ -135,34 +135,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          # Expose the runner's ADB server over Tailscale. `adb tcpip 5555`
-          # targets the emulator guest and does not expose the host ADB server;
-          # port 5555 is also used by the emulator console.
-          adb kill-server || true
-          sudo iptables -I INPUT -i tailscale0 -p tcp --dport 5037 -j ACCEPT || true
-          adb -a start-server
+          # scrcpy needs a direct connection to the Android guest. A remote
+          # ADB-server socket lists devices but cannot carry scrcpy's forwarded
+          # video socket back to this computer. Relay the emulator's loopback
+          # ADB port through a Tailscale-only listener instead.
+          adb -s emulator-5554 tcpip 5555
           TAILSCALE_IP=$(tailscale ip -4)
           test -n "$TAILSCALE_IP"
+          sudo iptables -I INPUT -i tailscale0 -p tcp --dport 5556 -j ACCEPT || true
+          nohup socat TCP-LISTEN:5556,bind="$TAILSCALE_IP",fork,reuseaddr TCP:127.0.0.1:5555 > socat-adb.log 2>&1 &
           for i in {1..20}; do
-            ADB_SERVER_SOCKET="tcp:$TAILSCALE_IP:5037" adb devices | grep -q 'emulator-5554.*device' && break
+            adb connect "$TAILSCALE_IP:5556" >/dev/null 2>&1 || true
+            adb devices | grep -q "$TAILSCALE_IP:5556.*device" && break
             sleep 1
           done
-          ADB_SERVER_SOCKET="tcp:$TAILSCALE_IP:5037" adb devices | grep -q 'emulator-5554.*device' || {
-            echo '::error::Remote ADB server is not reachable on Tailscale.'
+          adb devices | grep -q "$TAILSCALE_IP:5556.*device" || {
+            echo '::error::Direct Android ADB relay is not reachable on Tailscale.'
             ss -lntp || true
+            cat socat-adb.log || true
             adb devices -l || true
             exit 1
           }
-          printf '%s:5037\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
+          printf '%s:5556\n' "$TAILSCALE_IP" > scrcpy-adb-endpoint.txt
           cat > /tmp/current-scrcpy-endpoint.md <<'EOF'
           # Active Android scrcpy endpoint
 
           This endpoint is private to your Tailscale tailnet and expires with this workflow.
 
           ```powershell
-          $env:ADB_SERVER_SOCKET = "tcp:__TAILSCALE_IP__:5037"
-          adb devices
-          scrcpy -s emulator-5554
+          adb connect __TAILSCALE_IP__:5556
+          scrcpy -s __TAILSCALE_IP__:5556
           ```
           EOF
           sed -i "s/__TAILSCALE_IP__/$TAILSCALE_IP/g" /tmp/current-scrcpy-endpoint.md
@@ -178,8 +180,8 @@ jobs:
             echo
             echo 'Install Tailscale and scrcpy on your computer, then run:'
             echo
-            echo "\`set ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 && adb devices\`"
-            echo "\`set ADB_SERVER_SOCKET=tcp:$TAILSCALE_IP:5037 && scrcpy -s emulator-5554\`"
+            echo "\`adb connect $TAILSCALE_IP:5556\`"
+            echo "\`scrcpy -s $TAILSCALE_IP:5556\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish browser access URL

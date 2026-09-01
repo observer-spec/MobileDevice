@@ -14,9 +14,8 @@ The Android job is in `.github/workflows/mobile.yml` and uses [`reactivecircus/a
 For low-latency native streaming, add a repository Actions secret named `TAILSCALE_AUTHKEY` containing an **ephemeral, tagged Tailscale auth key** permitted by your tailnet ACL. Install Tailscale and [scrcpy](https://github.com/Genymobile/scrcpy) on your computer. Each live workflow writes the private endpoint to `CURRENT_SCRCPY_ENDPOINT.md`; connect with:
 
 ```bash
-set ADB_SERVER_SOCKET=tcp:<tailscale-ip>:5037
-adb devices
-scrcpy -s emulator-5554
+adb connect <tailscale-ip>:5556
+scrcpy -s <tailscale-ip>:5556
 ```
 
 The endpoint is reachable only from your Tailscale network and expires when the Actions job ends. Without the secret, browser noVNC access still works normally.
