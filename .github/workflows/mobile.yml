@@ -31,6 +31,7 @@ jobs:
       # Use a dedicated secret. The prior VNC_PASSWORD secret is a one-character
       # value, which caused both global log masking and rejected authentication.
       ANDROID_VNC_PASSWORD: ${{ secrets.ANDROID_VNC_PASSWORD }}
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
     steps:
       # Required because SDK setup is maintained in scripts/setup-android-sdk.sh.
       - name: Checkout repository
@@ -39,12 +40,11 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Join private Tailscale network for native scrcpy
-        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        if: ${{ env.TAILSCALE_AUTHKEY != '' }}
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           hostname: mobiledevice-${{ github.run_id }}
-          tags: tag:ci
 
       - name: Prepare SDK directory for cache restore
         run: |
@@ -130,7 +130,7 @@ jobs:
           adb shell settings put global animator_duration_scale 0 || true
 
       - name: Enable native scrcpy over Tailscale
-        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        if: ${{ env.TAILSCALE_AUTHKEY != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
